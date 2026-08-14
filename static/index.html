@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper Book Compiler</title>
+<style>
+  :root {
+    --ink: #16181d; --muted: #6b7280; --faint: #9aa1ac;
+    --bg: #f6f7f9; --surface: #ffffff; --line: #e6e8ec;
+    --accent: #3452e0; --accent-dim: #eef0fd; --accent-ring: rgba(52,82,224,.18);
+    --ok: #12805c; --ok-bg: #eafbf3; --fail: #c23a2e; --fail-bg: #fdeeec;
+    --radius: 12px; --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink);
+    margin: 0; padding: 48px 24px 100px; max-width: 780px; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  header.page-head { margin-bottom: 36px; }
+  h1 { font-size: 22px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 6px; }
+  .sub { color: var(--muted); font-size: 14px; line-height: 1.5; max-width: 56ch; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; margin-bottom: 20px; box-shadow: 0 1px 2px rgba(16,24,40,.03);
+  }
+  .step-eyebrow {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+  }
+  .step-eyebrow .num {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent-dim); color: var(--accent);
+    font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .step-eyebrow .title { font-size: 13.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--ink); }
+  .step-eyebrow .hint { font-size: 12.5px; color: var(--faint); margin-left: auto; }
+
+  label {
+    display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; font-weight: 500;
+  }
+  input[type=text], select, textarea {
+    font-family: inherit; font-size: 14px; padding: 9px 12px; border: 1px solid var(--line);
+    background: var(--surface); border-radius: var(--radius-sm); width: 100%; color: var(--ink);
+    transition: border-color .12s, box-shadow .12s;
+  }
+  input[type=text]:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+  input[type=text]::placeholder, textarea::placeholder { color: var(--faint); }
+
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 200px; }
+  .row + .row { margin-top: 16px; }
+  .field-gap { height: 14px; }
+
+  .fill-defaults {
+    display: inline-block; margin-top: 8px; font-size: 12.5px; color: var(--accent);
+    text-decoration: none; font-weight: 500;
+  }
+  .fill-defaults:hover { text-decoration: underline; }
+
+  .checkrow { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+  .checkrow input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+  .checkrow label { margin: 0; font-size: 13.5px; color: var(--ink); font-weight: 400; }
+
+  #drop {
+    border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 36px 24px; text-align: center;
+    color: var(--muted); cursor: pointer; background: var(--bg); transition: all .15s; font-size: 14px;
+  }
+  #drop svg { display: block; margin: 0 auto 10px; opacity: .55; }
+  #drop.drag { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  #drop .drop-sub { font-size: 12.5px; color: var(--faint); margin-top: 4px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--faint);
+    font-weight: 650; padding: 0 8px 8px; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.pages { width: 56px; text-align: center; font-size: 13px; color: var(--muted); padding-top: 14px; }
+  td.ord { width: 56px; }
+  .miniinput { width: 56px; padding: 6px 8px; font-size: 13px; border-radius: 7px; }
+  .particulars { width: 100%; min-height: 44px; padding: 7px 10px; font-size: 13.5px; resize: vertical; border-radius: 7px; }
+
+  .btn {
+    background: var(--accent); color: #fff; border: none; padding: 11px 24px; font-size: 14px;
+    border-radius: var(--radius-sm); cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: background .12s, transform .08s;
+  }
+  .btn:hover { background: #2a41c4; }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { background: var(--line); color: var(--faint); cursor: default; }
+
+  .remove {
+    color: var(--faint); cursor: pointer; font-size: 12px; background: none; border: none;
+    font-weight: 500; padding: 4px; margin-top: 8px;
+  }
+  .remove:hover { color: var(--fail); }
+
+  .generate-row { display: flex; align-items: center; gap: 14px; margin: 8px 0 4px; }
+  #status { font-size: 13px; color: var(--muted); }
+
+  #results { display: none; }
+  .result-banner {
+    display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: var(--radius-sm);
+    font-size: 14px; font-weight: 600; margin-bottom: 14px;
+  }
+  .result-banner.pass { background: var(--ok-bg); color: var(--ok); }
+  .result-banner.fail { background: var(--fail-bg); color: var(--fail); }
+  .vollist { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  pre {
+    white-space: pre-wrap; font-family: "SF Mono", "SFMono-Regular", Menlo, monospace; font-size: 12.5px;
+    background: var(--bg); border: 1px solid var(--line); padding: 14px 16px; border-radius: var(--radius-sm);
+    color: var(--muted); line-height: 1.6;
+  }
+  #downloadLink {
+    display: inline-block; text-decoration: none; margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <h1>Paper Book Compiler</h1>
+  <div class="sub">Drop in the annexures, fill in the particulars, get back a paginated, bookmarked, signed, volume-split paper book with a master &amp; volume-wise index.</div>
+</header>
+
+<div class="card">
+  <div class="step-eyebrow"><span class="num">1</span><span class="title">Case details</span></div>
+
+  <div class="row">
+    <div>
+      <label>Court / Tribunal</label>
+      <input type="text" id="courtName" placeholder="IN THE NATIONAL COMPANY LAW APPELLATE TRIBUNAL, AT CHENNAI">
+    </div>
+    <div>
+      <label>Forum</label>
+      <select id="forum" onchange="applyForumDefaults(false)">
+        <option value="NCLAT">NCLAT (190 pages/volume)</option>
+        <option value="NCLT">NCLT (150 pages/volume)</option>
+      </select>
+      <a href="#" class="fill-defaults" onclick="applyForumDefaults(true); return false;">Fill in standard details for this forum</a>
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Jurisdiction line (optional)</label>
+      <input type="text" id="jurisdiction" placeholder="APPELLATE JURISDICTION">
+    </div>
+    <div>
+      <label>Case No.</label>
+      <input type="text" id="caseNoLine" placeholder="COMPANY APPEAL (AT) NO. _____ OF 2026">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>"In the matter of" heading</label>
+      <input type="text" id="matterHeading" value="IN THE MATTER OF:">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Party 1 name</label>
+      <input type="text" id="party1Name" placeholder="e.g. Marri Venugopal">
+      <div class="field-gap"></div>
+      <label>Party 1 designation</label>
+      <input type="text" id="party1Desig" placeholder="...Appellant">
+    </div>
+    <div>
+      <label>Party 2 name</label>
+      <input type="text" id="party2Name" placeholder="e.g. Aarush Building Materials Pvt. Ltd. &amp; 6 Others">
+      <div class="field-gap"></div>
+      <label>Party 2 designation</label>
+      <input type="text" id="party2Desig" placeholder="...Respondents">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Counsel name</label>
+      <input type="text" id="counselName" placeholder="M/s Advocate Name(s), Advocate">
+      <div class="field-gap"></div>
+      <label>Counsel address (multi-line)</label>
+      <textarea class="particulars" id="counselAddress" style="min-height:60px" placeholder="Chamber / office address"></textarea>
+    </div>
+    <div>
+      <label>Counsel email(s) — one per line</label>
+      <textarea class="particulars" id="counselEmail" style="min-height:44px" placeholder="name@example.com"></textarea>
+      <div class="field-gap"></div>
+      <label>Counsel phone</label>
+      <input type="text" id="counselPhone" placeholder="98765 43210">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Date</label>
+      <input type="text" id="filedDate" placeholder="e.g. 06.08.2026">
+    </div>
+    <div>
+      <label>Place</label>
+      <input type="text" id="filedPlace" placeholder="e.g. Chennai">
+    </div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Signature image, optional (wet-signature scan, placed above the counsel block)</label>
+      <input type="file" id="sigFile" accept="image/*">
+    </div>
+  </div>
+
+  <div class="checkrow">
+    <input type="checkbox" id="continuous" checked>
+    <label>Continue page numbering across volumes (Vol 2 starts where Vol 1 ends)</label>
+  </div>
+</div>
+
+<div class="card">
+  <div class="step-eyebrow"><span class="num">2</span><span class="title">Annexures</span></div>
+
+  <div id="drop">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+    Drag &amp; drop annexure PDFs here, or click to browse
+    <div class="drop-sub">Page counts are read automatically</div>
+  </div>
+  <input type="file" id="fileInput" accept="application/pdf" multiple style="display:none;">
+  <table id="axTable" style="display:none;">
+    <thead>
+      <tr><th class="ord">Order</th><th>File / Heading</th><th class="pages">Pages</th><th>Particulars (for the index)</th><th></th></tr>
+    </thead>
+    <tbody id="axBody"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <div class="step-eyebrow"><span class="num">3</span><span class="title">Generate</span></div>
+  <div class="generate-row">
+    <button class="btn" id="genBtn" disabled>Generate Paper Book</button>
+    <div id="status"></div>
+  </div>
+
+  <div id="results">
+    <div id="qcHeadline"></div>
+    <div class="vollist" id="volList"></div>
+    <pre id="qcText"></pre>
+    <a id="downloadLink" class="btn">Download ZIP</a>
+  </div>
+</div>
+
+<script>
+let sessionId = null;
+let annexures = []; // {id, filename, page_count, heading, particulars, order}
+
+const FORUM_DEFAULTS = {
+  NCLAT: {
+    courtName: 'IN THE NATIONAL COMPANY LAW APPELLATE TRIBUNAL, AT CHENNAI',
+    jurisdiction: 'APPELLATE JURISDICTION',
+    caseNoLine: (year) => `COMPANY APPEAL (AT) NO. _____ OF ${year}`,
+    party1Desig: '...Appellant',
+    party2Desig: '...Respondents',
+  },
+  NCLT: {
+    courtName: 'IN THE NATIONAL COMPANY LAW TRIBUNAL, CHENNAI BENCH',
+    jurisdiction: '',
+    caseNoLine: (year) => `COMPANY PETITION NO. _____ OF ${year}`,
+    party1Desig: '...Petitioner',
+    party2Desig: '...Respondent',
+  },
+};
+
+function applyForumDefaults(force) {
+  const forum = document.getElementById('forum').value;
+  const d = FORUM_DEFAULTS[forum];
+  if (!d) return;
+  const year = new Date().getFullYear();
+  const setIfEmptyOrForce = (id, value) => {
+    const el = document.getElementById(id);
+    if (force || !el.value.trim()) el.value = value;
+  };
+  setIfEmptyOrForce('courtName', d.courtName);
+  setIfEmptyOrForce('jurisdiction', d.jurisdiction);
+  setIfEmptyOrForce('caseNoLine', d.caseNoLine(year));
+  setIfEmptyOrForce('party1Desig', d.party1Desig);
+  setIfEmptyOrForce('party2Desig', d.party2Desig);
+}
+
+window.addEventListener('DOMContentLoaded', () => applyForumDefaults(false));
+
+async function ensureSession() {
+  if (sessionId) return sessionId;
+  const r = await fetch('/api/session', {method:'POST'});
+  const j = await r.json();
+  sessionId = j.session_id;
+  return sessionId;
+}
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+drop.addEventListener('click', () => fileInput.click());
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+async function handleFiles(fileList) {
+  await ensureSession();
+  const form = new FormData();
+  form.append('session_id', sessionId);
+  for (const f of fileList) form.append('files', f);
+  document.getElementById('status').textContent = 'Uploading and reading page counts…';
+  const r = await fetch('/api/upload', {method:'POST', body: form});
+  const j = await r.json();
+  let n = annexures.length;
+  for (const f of j.files) {
+    n += 1;
+    annexures.push({
+      id: f.id, filename: f.filename, page_count: f.page_count,
+      heading: '', particulars: '', order: n,
+    });
+  }
+  document.getElementById('status').textContent = '';
+  renderTable();
+}
+
+function renderTable() {
+  const tbl = document.getElementById('axTable');
+  const body = document.getElementById('axBody');
+  body.innerHTML = '';
+  annexures.sort((a,b) => a.order - b.order);
+  annexures.forEach((a, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ord"><input class="miniinput" type="number" value="${a.order}" data-idx="${i}" data-field="order"></td>
+      <td>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">${a.filename}</div>
+        <input class="miniinput" style="width:170px" type="text" value="${a.heading}" data-idx="${i}" data-field="heading" placeholder="e.g. ANNEXURE A1 (blank = plain item)">
+      </td>
+      <td class="pages">${a.page_count}</td>
+      <td><textarea class="particulars" data-idx="${i}" data-field="particulars" placeholder="Description — or, if Heading is blank, the whole index line (e.g. 'Memo of Parties')">${a.particulars}</textarea></td>
+      <td><button class="remove" data-idx="${i}">remove</button></td>
+    `;
+    body.appendChild(tr);
+  });
+  tbl.style.display = annexures.length ? 'table' : 'none';
+  document.getElementById('genBtn').disabled = annexures.length === 0;
+
+  body.querySelectorAll('input, textarea').forEach(el => {
+    el.addEventListener('input', e => {
+      const idx = +e.target.dataset.idx, field = e.target.dataset.field;
+      annexures[idx][field] = field === 'order' ? (+e.target.value || 0) : e.target.value;
+    });
+  });
+  body.querySelectorAll('.remove').forEach(btn => {
+    btn.addEventListener('click', e => {
+      annexures.splice(+e.target.dataset.idx, 1);
+      renderTable();
+    });
+  });
+}
+
+document.getElementById('genBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  document.getElementById('status').textContent = 'Compiling — packing volumes, generating indexes, stamping pages…';
+  document.getElementById('results').style.display = 'none';
+
+  const sigFile = document.getElementById('sigFile').files[0];
+  if (sigFile) {
+    const f = new FormData();
+    f.append('session_id', sessionId);
+    f.append('file', sigFile);
+    await fetch('/api/upload_signature', {method:'POST', body: f});
+  }
+
+  const payload = {
+    session_id: sessionId,
+    forum: document.getElementById('forum').value,
+    court_name: document.getElementById('courtName').value,
+    jurisdiction: document.getElementById('jurisdiction').value,
+    case_no_line: document.getElementById('caseNoLine').value,
+    matter_heading: document.getElementById('matterHeading').value,
+    party1_name: document.getElementById('party1Name').value,
+    party1_designation: document.getElementById('party1Desig').value,
+    party2_name: document.getElementById('party2Name').value,
+    party2_designation: document.getElementById('party2Desig').value,
+    counsel_name: document.getElementById('counselName').value,
+    counsel_address: document.getElementById('counselAddress').value,
+    counsel_email: document.getElementById('counselEmail').value,
+    counsel_phone: document.getElementById('counselPhone').value,
+    filed_date: document.getElementById('filedDate').value,
+    filed_place: document.getElementById('filedPlace').value,
+    continuous_numbering: document.getElementById('continuous').checked,
+    annexures: annexures.map(a => ({id: a.id, heading: a.heading, particulars: a.particulars || '(no particulars entered)', order: a.order})),
+  };
+
+  const r = await fetch('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+  const j = await r.json();
+  btn.disabled = false;
+  document.getElementById('status').textContent = '';
+
+  const results = document.getElementById('results');
+  results.style.display = 'block';
+  document.getElementById('qcHeadline').innerHTML = j.qc_pass
+    ? '<div class="result-banner pass">✓ QC passed — ready to file</div>'
+    : '<div class="result-banner fail">✕ QC failed — see report below, not safe to file as-is</div>';
+  document.getElementById('volList').innerHTML = (j.volumes || [])
+    .map(v => `Volume ${v.number}: ${v.pages} pages`).join(' &nbsp;|&nbsp; ');
+  document.getElementById('qcText').textContent = j.qc_text || '';
+  const link = document.getElementById('downloadLink');
+  link.href = j.download_url;
+  link.textContent = 'Download ZIP (volumes + master index + QC report)';
+});
+</script>
+</body>
+</html>
