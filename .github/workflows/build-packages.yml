@@ -1,0 +1,60 @@
+name: Build packages
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch: {}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Upgrade pip / build tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt pyinstaller
+      - name: Build with PyInstaller (Windows)
+        run: |
+          pyinstaller --name PaperBookCompiler --onedir --add-data "static;static" --add-data "sessions;sessions" run_app.py
+      - name: Package Windows artifact
+        run: |
+          powershell -Command "Compress-Archive -Path dist\\PaperBookCompiler\\* -DestinationPath PaperBookCompiler-windows.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PaperBookCompiler-windows
+          path: PaperBookCompiler-windows.zip
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Upgrade pip / build tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt pyinstaller
+      - name: Build with PyInstaller (macOS)
+        run: |
+          pyinstaller --name PaperBookCompiler --onedir --add-data "static:static" --add-data "sessions:sessions" run_app.py
+      - name: Create DMG
+        run: |
+          mkdir -p dmg_staging
+          cp -R dist/PaperBookCompiler dmg_staging/
+          hdiutil create -volname "PaperBookCompiler" -srcfolder dmg_staging -ov -format UDZO PaperBookCompiler-macos.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PaperBookCompiler-macos
+          path: PaperBookCompiler-macos.dmg
